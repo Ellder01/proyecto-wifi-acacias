@@ -4,10 +4,13 @@ from reglas import (
     RUTA_DATOS,
     calcular_resumen,
     cargar_datos,
+    comparar_zonas,
     construir_url_mapa,
     filtrar_zonas,
     obtener_detalle_zona,
+    obtener_puntos_mapa,
     parsear_coordenada,
+    ranking_barrios,
     resumir_por_columna,
     verificar_clave_admin,
 )
@@ -93,3 +96,22 @@ def test_resumir_por_columna():
     assert sum(item["zonas"] for item in desglose_zona) == len(df)
     assert sum(item["puntos_acceso"] for item in desglose_zona) == int(df["puntos_acceso"].sum())
     assert resumir_por_columna(pd.DataFrame(), "zona") == []
+
+
+def test_mapa_ranking_y_comparador():
+    df = cargar_datos()
+    puntos = obtener_puntos_mapa(df)
+    assert len(puntos) > 0
+    assert all("latitud" in p and "longitud" in p and "url_mapa" in p for p in puntos)
+
+    top_barrios = ranking_barrios(df, top_n=5)
+    assert len(top_barrios) <= 5
+    assert len(top_barrios) > 0
+
+    zonas_disp = df["zona_wifi"].unique().tolist()
+    if len(zonas_disp) >= 2:
+        comp = comparar_zonas(df, zonas_disp[0], zonas_disp[1])
+        assert comp is not None
+        assert comp["zona_a"]["zona_wifi"] == zonas_disp[0]
+        assert comp["zona_b"]["zona_wifi"] == zonas_disp[1]
+    assert comparar_zonas(df, zonas_disp[0], "ZONA_INEXISTENTE") is None

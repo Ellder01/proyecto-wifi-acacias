@@ -93,6 +93,29 @@ def resumir_por_columna(df: pd.DataFrame, columna: str) -> list[dict]:
     return filas
 
 
+def ranking_barrios(df: pd.DataFrame, top_n: int = 10) -> list[dict]:
+    if df.empty or "barrio" not in df.columns or top_n <= 0:
+        return []
+    agrupado = (
+        df.groupby("barrio", dropna=False)
+        .agg(
+            zonas=("zona_wifi", "count") if "zona_wifi" in df.columns else ("barrio", "count"),
+            puntos_acceso=("puntos_acceso", "sum"),
+        )
+        .reset_index()
+        .sort_values(by=["puntos_acceso", "zonas", "barrio"], ascending=[False, False, True])
+        .head(top_n)
+    )
+    return [
+        {
+            "barrio": str(fila["barrio"]),
+            "zonas": int(fila["zonas"]),
+            "puntos_acceso": int(fila["puntos_acceso"]),
+        }
+        for _, fila in agrupado.iterrows()
+    ]
+
+
 def parsear_coordenada(valor: object) -> float | None:
     if valor is None or pd.isna(valor):
         return None
@@ -153,6 +176,41 @@ def obtener_detalle_zona(df: pd.DataFrame, nombre_zona: str) -> dict | None:
         "url_mapa": url_mapa,
         "url_imagen": url_imagen,
     }
+
+
+def obtener_puntos_mapa(df: pd.DataFrame) -> list[dict]:
+    if df.empty or "latitud" not in df.columns or "longitud" not in df.columns:
+        return []
+    puntos = []
+    for _, fila in df.iterrows():
+        lat = parsear_coordenada(fila["latitud"])
+        lon = parsear_coordenada(fila["longitud"])
+        url_mapa = construir_url_mapa(lat, lon)
+        if lat is None or lon is None or url_mapa is None:
+            continue
+        puntos.append(
+            {
+                "zona_wifi": str(fila["zona_wifi"]) if "zona_wifi" in fila.index else "Zona Wi-Fi",
+                "barrio": str(fila["barrio"]) if "barrio" in fila.index else "Sin especificar",
+                "direccion": str(fila["direccion"]) if "direccion" in fila.index else "Sin especificar",
+                "zona": str(fila["zona"]) if "zona" in fila.index else "Sin especificar",
+                "conexion": str(fila["conexion"]) if "conexion" in fila.index else "Sin especificar",
+                "energia": str(fila["energia"]) if "energia" in fila.index else "Sin especificar",
+                "puntos_acceso": int(fila["puntos_acceso"]) if "puntos_acceso" in fila.index else 0,
+                "latitud": lat,
+                "longitud": lon,
+                "url_mapa": url_mapa,
+            }
+        )
+    return puntos
+
+
+def comparar_zonas(df: pd.DataFrame, zona_a: str, zona_b: str) -> dict | None:
+    det_a = obtener_detalle_zona(df, zona_a)
+    det_b = obtener_detalle_zona(df, zona_b)
+    if det_a is None or det_b is None:
+        return None
+    return {"zona_a": det_a, "zona_b": det_b}
 
 
 def verificar_clave_admin(clave_ingresada: str, clave_esperada: str) -> bool:
