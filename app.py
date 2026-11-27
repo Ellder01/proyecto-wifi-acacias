@@ -141,7 +141,7 @@ def _render_mapa_interactivo(puntos: list[dict]):
           }})();
         </script>
         """
-        solara.HTML(html=html_mapa)
+        solara.HTML(html_mapa)
 
 
 def _tarjeta_comparacion(titulo_rol: str, det: dict, color_borde: str):
