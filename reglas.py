@@ -7,13 +7,27 @@ FUENTE_NOMBRE = "Alcaldía de Acacías - Datos Abiertos Colombia (datos.gov.co)"
 FUENTE_URL = "https://www.datos.gov.co/Ciencia-Tecnolog-a-e-Innovaci-n/Zonas-Wifi-Gratis-Municipio-de-Acac-as/r7mn-ty3w/about_data"
 FUENTE_LICENCIA = "Licencia Abierta de Datos Públicos de Colombia (Creative Commons Attribution 4.0)"
 
+COLUMNAS_TEXTO = [
+    "zona",
+    "conexion",
+    "barrio",
+    "zona_wifi",
+    "direccion",
+    "ssid",
+    "radio_cobertura",
+    "instalacion",
+    "energia",
+    "imagen_ubicacion",
+]
+
 
 def cargar_datos(ruta: Path = RUTA_DATOS) -> pd.DataFrame:
     df = pd.read_csv(ruta, encoding="utf-8")
     df.columns = [c.strip().lower() for c in df.columns]
-    for col in ["zona", "conexion", "barrio", "zona_wifi", "direccion", "ssid", "radio_cobertura"]:
+    for col in COLUMNAS_TEXTO:
         if col in df.columns:
             df[col] = df[col].fillna("Sin especificar").astype(str).str.strip()
+            df.loc[df[col] == "", col] = "Sin especificar"
     df["puntos_acceso"] = pd.to_numeric(df["puntos_acceso"], errors="coerce").fillna(0).astype(int)
     return df
 
@@ -48,6 +62,68 @@ def calcular_resumen(df: pd.DataFrame) -> dict:
         "total_zonas": int(len(df)),
         "total_puntos_acceso": int(df["puntos_acceso"].sum()),
         "barrios_cubiertos": int(df["barrio"].nunique()),
+    }
+
+
+def parsear_coordenada(valor: object) -> float | None:
+    if valor is None or pd.isna(valor):
+        return None
+    texto = str(valor).strip().replace(",", ".")
+    if not texto or texto.lower() in {"nan", "none", "sin especificar"}:
+        return None
+    try:
+        return float(texto)
+    except ValueError:
+        return None
+
+
+def construir_url_mapa(latitud: object, longitud: object) -> str | None:
+    lat = parsear_coordenada(latitud)
+    lon = parsear_coordenada(longitud)
+    if lat is None or lon is None:
+        return None
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None
+    if lat == 0.0 and lon == 0.0:
+        return None
+    return f"https://www.google.com/maps?q={lat},{lon}"
+
+
+def obtener_detalle_zona(df: pd.DataFrame, nombre_zona: str) -> dict | None:
+    if df.empty or not nombre_zona or "zona_wifi" not in df.columns:
+        return None
+    coincidencias = df[df["zona_wifi"] == nombre_zona]
+    if coincidencias.empty:
+        return None
+    fila = coincidencias.iloc[0]
+
+    def _campo(col: str, defecto: str = "Sin especificar") -> str:
+        if col not in fila.index or pd.isna(fila[col]):
+            return defecto
+        val = str(fila[col]).strip()
+        return val if val else defecto
+
+    lat = parsear_coordenada(fila["latitud"]) if "latitud" in fila.index else None
+    lon = parsear_coordenada(fila["longitud"]) if "longitud" in fila.index else None
+    url_mapa = construir_url_mapa(lat, lon)
+    imagen = _campo("imagen_ubicacion", defecto="")
+    url_imagen = imagen if imagen.startswith(("http://", "https://")) else None
+
+    return {
+        "zona_wifi": _campo("zona_wifi"),
+        "barrio": _campo("barrio"),
+        "direccion": _campo("direccion"),
+        "zona": _campo("zona"),
+        "conexion": _campo("conexion"),
+        "instalacion": _campo("instalacion"),
+        "energia": _campo("energia"),
+        "puntos_acceso": int(fila["puntos_acceso"]) if "puntos_acceso" in fila.index else 0,
+        "radio_cobertura": _campo("radio_cobertura"),
+        "ssid": _campo("ssid"),
+        "latitud": lat,
+        "longitud": lon,
+        "url_mapa": url_mapa,
+        "url_imagen": url_imagen,
     }
 
 
