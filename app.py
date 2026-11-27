@@ -9,6 +9,7 @@ from reglas import (
     filtrar_zonas,
     obtener_detalle_zona,
     obtener_opciones,
+    resumir_por_columna,
     verificar_clave_admin,
 )
 
@@ -26,6 +27,43 @@ def _limpiar_filtros(zona_sel, conexion_sel, busqueda):
     zona_sel.set("Todas")
     conexion_sel.set("Todas")
     busqueda.set("")
+
+
+def _render_desglose_barras(titulo: str, items: list[dict], color_barra: str):
+    max_zonas = max((item["zonas"] for item in items), default=1) or 1
+    with solara.Div(
+        style={
+            "background": "#ffffff",
+            "border": "1px solid #e2e8f0",
+            "border-radius": "12px",
+            "padding": "20px 22px",
+            "box-shadow": "0 1px 3px rgba(15, 23, 42, 0.04)",
+        }
+    ):
+        solara.Markdown(f"### {titulo}")
+        if not items:
+            solara.Info("No hay datos disponibles para mostrar este desglose.")
+            return
+
+        bloques = []
+        for item in items:
+            ancho_rel = max(6, int(round((item["zonas"] / max_zonas) * 100)))
+            bloques.append(
+                f"<div style='margin-bottom:14px;'>"
+                f"<div style='display:flex;justify-content:space-between;align-items:baseline;"
+                f"font-size:14px;color:#0f172a;margin-bottom:5px;'>"
+                f"<strong>{item['categoria']}</strong>"
+                f"<span style='font-size:13px;color:#475569;font-variant-numeric:tabular-nums;'>"
+                f"{item['zonas']} zonas ({item['porcentaje']}%) · {item['puntos_acceso']} APs</span>"
+                f"</div>"
+                f"<div style='width:100%;background:#f1f5f9;border-radius:999px;height:10px;"
+                f"overflow:hidden;'>"
+                f"<div style='width:{ancho_rel}%;background:{color_barra};height:100%;"
+                f"border-radius:999px;'></div>"
+                f"</div>"
+                f"</div>"
+            )
+        solara.Markdown("".join(bloques))
 
 
 @solara.component
@@ -136,7 +174,7 @@ def Page():
                         },
                     )
 
-            # Tarjetas de resumen (presentes en todas las vistas)
+            # Tarjetas de resumen
             metricas = [
                 ("Zonas encontradas", resumen["total_zonas"], "#0f4c81"),
                 ("Puntos de acceso (APs)", resumen["total_puntos_acceso"], "#0d9488"),
@@ -205,7 +243,6 @@ def Page():
                 else:
                     solara.DataFrame(tabla, items_per_page=10)
 
-                    # Ficha de detalle de la zona seleccionada (Mejora #2)
                     solara.Markdown("### Detalle de la zona seleccionada")
                     with solara.Div(
                         style={
@@ -271,22 +308,32 @@ def Page():
                                 f"</div>"
                             )
 
-            # SECCIÓN 2: ANÁLISIS Y DESCARGA (preparada para Mejora #3)
+            # SECCIÓN 2: ANÁLISIS Y DESCARGA (Mejora #3)
             elif seccion_activa.value == "Análisis y Descarga":
+                solara.Markdown(
+                    f"<p style='margin:0;font-size:13px;color:#475569;'>"
+                    f"<strong style='color:#0f4c81;'>Contexto del análisis:</strong> "
+                    f"{estado_filtro}</p>"
+                )
+                desglose_conexion = resumir_por_columna(df_filtrado, "conexion")
+                desglose_zona = resumir_por_columna(df_filtrado, "zona")
+
+                _render_desglose_barras(
+                    "Distribución por tipo de conexión", desglose_conexion, "#0f4c81"
+                )
+                _render_desglose_barras(
+                    "Distribución por zona (Urbana / Rural)", desglose_zona, "#0d9488"
+                )
+
                 with solara.Div(
                     style={
                         "background": "#ffffff",
                         "border": "1px solid #e2e8f0",
                         "border-radius": "12px",
-                        "padding": "20px 22px",
+                        "padding": "18px 22px",
                     }
                 ):
-                    solara.Markdown("### Análisis y exportación de datos")
-                    solara.Markdown(
-                        "En el siguiente paso añadiremos aquí las gráficas de distribución "
-                        "(por tipo de conexión y zona urbana/rural) junto con la descarga "
-                        "en CSV del filtro activo."
-                    )
+                    solara.Markdown("### Exportar resultados actuales")
                     if not df_filtrado.empty:
                         csv_bytes = df_filtrado.to_csv(index=False).encode("utf-8")
                         solara.FileDownload(
@@ -294,6 +341,8 @@ def Page():
                             filename="zonas_wifi_acacias_filtrado.csv",
                             label="Descargar selección actual en CSV",
                         )
+                    else:
+                        solara.Info("Ajusta los filtros para habilitar la descarga CSV.")
 
             # SECCIÓN 3: DATOS Y ADMINISTRACIÓN
             else:

@@ -8,6 +8,7 @@ from reglas import (
     filtrar_zonas,
     obtener_detalle_zona,
     parsear_coordenada,
+    resumir_por_columna,
     verificar_clave_admin,
 )
 
@@ -83,3 +84,12 @@ def test_obtener_detalle_zona():
     assert detalle["url_mapa"] == "https://www.google.com/maps?q=4.1425,-73.6266"
     assert detalle["url_imagen"] == "https://example.com/foto.jpg"
     assert obtener_detalle_zona(df_demo, "NO EXISTE") is None
+
+
+def test_resumir_por_columna():
+    df = cargar_datos()
+    desglose_zona = resumir_por_columna(df, "zona")
+    assert len(desglose_zona) > 0
+    assert sum(item["zonas"] for item in desglose_zona) == len(df)
+    assert sum(item["puntos_acceso"] for item in desglose_zona) == int(df["puntos_acceso"].sum())
+    assert resumir_por_columna(pd.DataFrame(), "zona") == []

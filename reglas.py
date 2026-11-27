@@ -65,6 +65,34 @@ def calcular_resumen(df: pd.DataFrame) -> dict:
     }
 
 
+def resumir_por_columna(df: pd.DataFrame, columna: str) -> list[dict]:
+    if df.empty or columna not in df.columns:
+        return []
+    total_zonas = len(df)
+    agrupado = (
+        df.groupby(columna, dropna=False)
+        .agg(
+            zonas=("zona_wifi", "count") if "zona_wifi" in df.columns else (columna, "count"),
+            puntos_acceso=("puntos_acceso", "sum"),
+        )
+        .reset_index()
+        .sort_values(by=["zonas", "puntos_acceso"], ascending=[False, False])
+    )
+    filas = []
+    for _, fila in agrupado.iterrows():
+        zonas_num = int(fila["zonas"])
+        porcentaje = round((zonas_num / total_zonas) * 100, 1) if total_zonas > 0 else 0.0
+        filas.append(
+            {
+                "categoria": str(fila[columna]),
+                "zonas": zonas_num,
+                "puntos_acceso": int(fila["puntos_acceso"]),
+                "porcentaje": porcentaje,
+            }
+        )
+    return filas
+
+
 def parsear_coordenada(valor: object) -> float | None:
     if valor is None or pd.isna(valor):
         return None
